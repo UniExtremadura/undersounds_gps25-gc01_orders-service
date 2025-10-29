@@ -1,0 +1,507 @@
+openapi: "3.0.1"
+
+info:
+  title: Servicio de Compras
+  description: |-
+    Servicio de Undersounds dedicado a la gestión de compras sobre el catálogo.
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+
+servers:
+  - url: https://undersounds.com/api/v1
+
+tags:
+  - name: order
+    description: Compras de contenido en la plataforma.
+
+paths:
+  /orders:
+    get:
+      tags:
+        - order
+      summary: Listar compras con filtros
+      #operationId: "controllers.order_controller.procesar_compras"
+      operationId: "listOrders"
+      description: Obtiene una lista de compras filtradas por cualquier atributo.
+                  | Si no se especifican filtros, se listan todas las compras.
+                  | Requiere JWT.
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - in: query
+          name: seller
+          schema:
+            type: string
+          description: Filtra por nombre de usuario del vendedor. Si no se proporciona, se devuelven las compras de todos los vendedores.
+          example: "coldplay_official"
+        - in: query
+          name: status
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+          description: Filtra por estado de la compra. Si no se proporciona, se devuelven las compras sin tener en cuenta el estado.
+          example: "PAID"
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+            format: date
+          description: Fecha mínima de la compra. Si no se proporciona, se devuelven las compras desde la primera.
+          example: "2025-10-01"
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+            format: date
+          description: Fecha máxima de la compra. Si no se proporciona, se devuelven las compras hasta la última.
+          example: "2025-10-17"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+          description: Número de página.
+          example: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+          description: Tamaño de página.
+          example: 20
+      responses:
+        '200':
+          description: Lista paginada de compras.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdersPage'
+
+    post:
+      tags:
+        - order
+      summary: Crear una nueva compra
+      #operationId: "controllers.order_controller.create_order"
+      operationId: "createOrder"
+      description: Permite crear una compra con los productos indicados. Requiere JWT.
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+
+      responses:
+        '201':
+          description: Compra creada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Error en el body de la petición.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                errorQuantity:
+                  summary: Cantidad incorrecta.
+                  value:
+                    code: 400
+                    message: "Solo existen 2 unidades para el artículo 550e8400-e29b-41d4-a716-446655440000 y se han especificado 3."
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Algunos de los items no se encontraron.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: Contenido no encontrado
+                  value:
+                    code: 404
+                    message: "El artículo 550e8400-e29b-41d4-a716-446655440000 no existe"
+
+  /orders/{orderId}:
+    get:
+      tags:
+        - order
+      summary: Obtener una compra
+      #operationId: "controllers.order_controller.proccess_orders_by_id"
+      operationId: "getOrdersById"
+      description: Recupera los datos de una compra por su ID público. Requiere JWT.
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          description: ID público de la compra.
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Datos de la compra.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/OrderNotFoundError'
+
+    patch:
+      tags:
+        - order
+      summary: Actualizar algún atributo de una compra
+      #operationId: "controllers.order_controller.proccess_orders_by_id"
+      operationId: "updateOrdersById"
+      description: |
+        Actualiza el estado de una orden. Transiciones permitidas:
+          - PENDING → PAID, CANCELLED
+          - PAID → SHIPPED, CANCELLED (requiere reembolso)
+          - SHIPPED → No se puede modificar
+          - CANCELLED → Estado final.
+        Requiere JWT o rol administrador.
+      security:
+        - bearerAuth: [ ]
+        - adminAuth: [ ]
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          description: ID público de la compra.
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: "#/components/schemas/OrderStatus"
+                  description: Nuevo estado de la compra.
+      responses:
+        '200':
+          description: Compra actualizada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/OrderNotFoundError'
+
+    delete:
+      tags:
+        - order
+      summary: Eliminar una compra
+      #operationId: "controllers.order_controller.proccess_orders_by_id"
+      operationId: "deleteOrdersById"
+      description: Si su estado aún está PENDIENTE el usuario puede cancelarla, de lo contrario solo administradores pueden eliminarla.
+      security:
+        - bearerAuth: [ ]
+        - adminAuth: [ ]
+      parameters:
+        - in: path
+          name: orderId
+          description: Identificador público de la compra a eliminar/cancelar.
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Compra eliminada correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Compra eliminada correctamente"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/OrderNotFoundError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT  
+
+  schemas:
+    Buyer:
+      type: object
+      description: Información del comprador.
+      required:
+        - name
+        - username
+      properties:
+        name:
+          type: string
+          description: Nombre completo del comprador.
+          example: "Miguel de Cervantes Saavedra"
+        username:
+          type: string
+          description: Nombre de usuario único del comprador.
+          example: "miguel_cervantes16"
+
+    Seller:
+      type: object
+      description: Información del vendedor.
+      required:
+        - name
+        - username
+        - pfp
+      properties:
+        name:
+          type: string
+          description: Nombre completo del vendedor.
+          example: "Coldplay"
+        username:
+          type: string
+          description: Nombre de usuario completo del vendedor.
+          example: "coldplay"
+        pfp:
+          type: string
+          description: Ruta de la foto de perfil del vendedor.
+          example: "https://undersounds.es/v1/users/pfps/coldplay.jpg"
+
+    OrderStatus:
+      type: string
+      description: |
+        Estados de la orden y transiciones permitidas:
+        - PENDING → PAID, CANCELLED
+        - PAID → SHIPPED, CANCELLED (con reembolso)
+        - SHIPPED → No se permiten más cambios
+        - CANCELLED → Estado final
+      enum:
+        - PENDING
+        - PAID
+        - SHIPPED
+        - CANCELLED
+      example: PAID
+
+    OrderItem:
+      type: object
+      description: Información del un artículo dentro de la compra.
+      required:
+        - publicId
+        - name
+        - imageSrc
+        - description
+        - seller
+        - quantity
+        - price
+        - total
+      properties:
+        publicId:
+          type: string
+          format: uuid
+          description: Identificador público único del producto.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Nombre completo del producto.
+          example: "Camiseta de Coldplay"
+        imageSrc:
+          type: string
+          description: Imágen del producto.
+          example: "https://undersounds.es/v1/products/images/550e8400-e29b-41d4-a716-446655440000.jpg"
+        description:
+          type: string
+          description: Descripción del producto.
+          example: "Una camiseta con el logo del último álbum de Coldplay en azul. Talla M"
+        seller:
+          $ref: '#/components/schemas/Seller'
+          description: Vendedor del producto.
+        quantity:
+          type: number
+          format: int64
+          description: Cantidad de este producto comprada.
+          example: 2
+        price:
+          type: number
+          format: float
+          description: Precio en euros del producto.
+          example: "9.99"
+        total:
+          type: number
+          format: float
+          description: Total en euros de la cantidad del producto comprada.
+          example: "19.98"
+
+    OrderResponse:
+      type: object
+      description: Respuesta ofrecida al cliente con información de una sola compra.
+      required:
+        - publicId
+        - madeBy
+        - items
+        - createdAt
+        - status
+        - total
+      properties:
+        publicId:
+          type: string
+          format: uuid
+          description: Identificador público único de la compra.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        madeBy:
+          $ref: '#/components/schemas/Buyer'
+          description: Usuario que ha realizado la compra.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          description: Productos que se han comprado.
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha en la que se realizó la compra.
+          example: "2025-10-17T14:30:00Z"
+        status: 
+          $ref: '#/components/schemas/OrderStatus'
+          description: Estado de la compra.
+        total:
+          type: number
+          format: float
+          description: Coste total en euros.
+          example: 19.99
+
+    CreateOrderRequest:
+      type: object
+      description: Petición para crear una compra.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: Productos a comprar con sus cantidades.
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required:
+              - productId
+              - quantity
+            properties:
+              productId:
+                type: string
+                format: uuid
+                description: Identificador público del producto.
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 100
+                description: Cantidad de unidades de este producto.
+                example: 2
+
+    OrdersPage:
+      type: object
+      description: Página ofrecida al cliente con información de las compras.
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderResponse"
+          description: Compras filtradas.
+        page:
+          type: integer
+          default: 0
+          minimum: 0
+          example: 0
+          description: Número de página que se quiere consultar.
+        size:
+          type: integer
+          default: 20
+          maximum: 100
+          example: 20
+          description: Tamaño de la página (máximo 100 registros).
+        totalElements:
+          type: integer
+          minimum: 0
+          example: 125
+          description: Número de compras obtenidas.
+        totalPages:
+          type: integer
+          minimum: 0
+          example: 7
+          description: Número de páginas totales del tamaño indicado.
+
+    ErrorResponse:
+      type: object
+      description: Objeto con información del error en la petición.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: Código interno del error.
+          example: 400
+        message:
+          type: string
+          description: Mensaje descriptivo del error.
+          example: "El campo 'items' es obligatorio."
+        details:
+          type: array
+          description: Información adicional sobre el error.
+          items:
+            type: string
+          example: [ "El campo 'items[0].quantity' debe ser mayor que 0" ]
+
+  responses:
+    UnauthorizedError:
+      description: Usuario no autenticado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorized:
+              summary: JWT inválido o ausente
+              value:
+                code: 401
+                message: "No autorizado"
+
+    OrderNotFoundError:
+      description: Compra no encontrada.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              summary: Compra no encontrado
+              value:
+                code: 404
+                message: "La compra 550e8400-e29b-41d4-a716-446655440000 no existe"
+
+security:
+  - bearerAuth: []          

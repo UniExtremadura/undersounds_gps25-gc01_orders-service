@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+    mariadb:
+        image: mariadb:10.11
+        container_name: undersounds_mariadb
+        environment:
+            MYSQL_ROOT_PASSWORD: mendo23
+            MYSQL_DATABASE: orders_db
+            MYSQL_USER: mendo
+            MYSQL_PASSWORD: 12345
+        ports:
+            - "3307:3306" # Standard port
+        volumes:
+            - mariadb_data:/var/lib/mysql
+            - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+    mariadb_data:
