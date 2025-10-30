@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from utils.encoder import CustomJSONProvider
 from dotenv import load_dotenv
 from db import db
+from controllers.order_controller import order_bp
 from sqlalchemy import text
 from auth.keycloak_config import init_keycloak
 from helpers.db_connection import dbConectar, verify_connection
@@ -26,7 +27,8 @@ def main():
 
     flask_app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     flask_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
- 
+    # Blueprint register
+    flask_app.register_blueprint(order_bp, url_prefix='/api/v1')
 
     # Keycloak app config
     flask_app.config['KEYCLOAK_SERVER_URL'] = 'http://localhost:8081/'
@@ -41,7 +43,7 @@ def main():
     # Verificación de conexión y tablas
     verify_connection(flask_app, db)
 
-    print("🚀 Servicio de Compras iniciando en puerto 8084...")
+    print("Servicio de Compras iniciando en puerto 8084...")
 
     # FLASK APP RUN
     flask_app.run(port=8084)
@@ -52,3 +54,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
