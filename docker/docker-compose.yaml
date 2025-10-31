@@ -44,16 +44,16 @@ services:
         networks:
             - keycloak_net    
 
-    redis:
-        image: redis:7-alpine
-        container_name: redis_cache
-        ports:
-            - "6379:6379"
-        volumes:
-            - redis_data:/data
-        networks:
-            - keycloak_net
-        command: redis-server --appendonly yes
+    #redis:
+    #    image: redis:7-alpine
+    #    container_name: redis_cache
+    #    ports:
+    #        - "6379:6379"
+    #    volumes:
+    #        - redis_data:/data
+    #    networks:
+    #        - keycloak_net
+    #    command: redis-server --appendonly yes
 volumes:
     mariadb_data:
 
