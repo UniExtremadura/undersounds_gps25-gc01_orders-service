@@ -3,14 +3,15 @@ openapi: "3.0.1"
 info:
   title: Servicio de Compras
   description: |-
-    Servicio de Undersounds dedicado a la gestión de compras sobre el catálogo.
+    API de Undersounds para la gestión integral de compras, permitiendo la 
+    administración de pedidos, control de inventario y consulta del catálogo de productos.
   license:
-    name: Apache 2.0
+    name: Apache License 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
   version: 1.0.0
 
 servers:
-  - url: https://undersounds.com/api/v1
+  - url: /api/v1/ #https://undersounds.com/api/v1 --> Produccion
 
 tags:
   - name: order
@@ -22,8 +23,8 @@ paths:
       tags:
         - order
       summary: Listar compras con filtros
-      #operationId: "controllers.order_controller.procesar_compras"
-      operationId: "listOrders"
+      operationId: "controllers.order_controller.procesar_compras"
+      #operationId: "listOrders"
       description: Obtiene una lista de compras filtradas por cualquier atributo.
                   | Si no se especifican filtros, se listan todas las compras.
                   | Requiere JWT.
@@ -82,8 +83,8 @@ paths:
       tags:
         - order
       summary: Crear una nueva compra
-      #operationId: "controllers.order_controller.create_order"
-      operationId: "createOrder"
+      operationId: "controllers.order_controller.create_order"
+      #operationId: "createOrder"
       description: Permite crear una compra con los productos indicados. Requiere JWT.
       security:
         - bearerAuth: [ ]
@@ -133,8 +134,8 @@ paths:
       tags:
         - order
       summary: Obtener una compra
-      #operationId: "controllers.order_controller.proccess_orders_by_id"
-      operationId: "getOrdersById"
+      operationId: "controllers.order_controller.proccess_orders_by_id"
+      #operationId: "getOrdersById"
       description: Recupera los datos de una compra por su ID público. Requiere JWT.
       security:
         - bearerAuth: [ ]
@@ -163,8 +164,8 @@ paths:
       tags:
         - order
       summary: Actualizar algún atributo de una compra
-      #operationId: "controllers.order_controller.proccess_orders_by_id"
-      operationId: "updateOrdersById"
+      operationId: "controllers.order_controller.update_order_by_id"
+      #operationId: "updateOrdersById"
       description: |
         Actualiza el estado de una orden. Transiciones permitidas:
           - PENDING → PAID, CANCELLED
@@ -210,8 +211,8 @@ paths:
       tags:
         - order
       summary: Eliminar una compra
-      #operationId: "controllers.order_controller.proccess_orders_by_id"
-      operationId: "deleteOrdersById"
+      operationId: "controllers.order_controller.delete_order_by_id"
+      #operationId: "deleteOrdersById"
       description: Si su estado aún está PENDIENTE el usuario puede cancelarla, de lo contrario solo administradores pueden eliminarla.
       security:
         - bearerAuth: [ ]
