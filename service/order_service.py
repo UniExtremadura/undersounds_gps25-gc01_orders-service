@@ -23,4 +23,8 @@ class OrderService:
     def list_orders(size: int, page: int):
         return OrderDAO.get_all(size, page)
     
+    @staticmethod
+    def list_orders_with_filters(filtros):
+        return OrderDAO.find_by_filter(**filtros) # Unpack filtros' dictionary elements to pass them to args of the function
+    
 

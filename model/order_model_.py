@@ -3,14 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from db import db
 from sqlalchemy.orm import relationship
 from sqlalchemy import ForeignKey
-import enum
+from enum import Enum
 from datetime import datetime
 
-class OrderStatus(enum.Enum):
+class OrderStatus(str, Enum):
     PENDING = "PENDING",
     PAID = "PAID",
     SHIPPED = "SHIPPED",
-    CANCELLED = "CANCELLED"
+    CANCELLED = "CANCELLED",
+    RECEIVED = "RECEIVED"
 
 class Order(db.Model):
     # Definicion del nombre de la tabla, si no se incluye, coge el nombre de la clase en formato snake-case para la creación de la tabla
