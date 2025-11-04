@@ -121,6 +121,31 @@ class OrderDAO:
         return query
     
     @staticmethod
+    def update_by_public_id(public_id: str, update_data: dict) -> Optional[Order]:
+        try:
+            order_encontrado = OrderDAO.find_by_public_id(public_id)
+            print(order_encontrado)
+            if order_encontrado:
+                print(order_encontrado.status)
+                if order_encontrado.status not in [OrderStatus.PENDING, OrderStatus.PAID]:
+                    raise ValueError(f"La orden {public_id} no se puede actualizar porque tiene status {order_encontrado.status}")
+                 
+                for key, value in update_data.items():
+                    print("Entro")
+                    if hasattr(order_encontrado, key):
+
+                        if key == 'status' and isinstance(value, str):
+                            setattr(order_encontrado, key, OrderStatus(value.upper()))
+                        else:
+                            setattr(order_encontrado, key, value)
+                db.session.commit()
+                return order_encontrado
+            return None
+        except Exception as e:
+            db.session.rollback()
+            raise e    
+    
+    @staticmethod
     def get_orders_by_seller(seller: str, 
                              page: int=0, 
                              size: int=20) -> Tuple[List[Order], int, int]:

@@ -58,3 +58,48 @@ def procesar_compras():
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@order_bp.route('/orders/<string:orderId>', methods=['PATCH'])
+#@token_required -> Validate user token
+#@role_validator('admin') -> Validate if the user requester is registered as an admin to do this operation
+@log('../logs/ficherosalida.log')
+def update_order_by_id(orderId: str):
+    try:
+        data = request.get_json() # Obtenemos los datos del cuerpo de la consulta
+                
+        if not data:
+            return jsonify({'error': 'Datos de actualización requeridos'}), 400
+        
+        is_updatable = order_service.OrderService.is_order_updatable(orderId)
+
+        if not is_updatable:
+            return jsonify({
+                f"La orden {orderId} no existe o no se puede actualizar (ya fue enviada, cancelada o entregada)"
+            }), 400
+        
+        order_update = order_service.OrderService.update_order(orderId, data)
+
+        if order_update:
+
+            order_updated_dict = order_service.OrderService.order_to_dict(order_update)
+            orderDTO_updated = OrderResponseDTO.model_validate(order_updated_dict)
+
+            return Response(
+                response = orderDTO_updated.model_dump_json(),
+                status = 200,
+                mimetype = 'application/json'
+            )
+        
+        else:
+            return Response(
+                response = f"La compra {orderId} no existe",
+                status = 404,
+                mimetype = 'application/json'
+            )
+        
+    except ValueError as e:
+        logger.warning(f"Error de validación: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error interno: {str(e)}")
+        return jsonify({'error': str(e)}), 500 
