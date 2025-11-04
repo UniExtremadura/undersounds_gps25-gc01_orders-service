@@ -30,7 +30,11 @@ def procesar_compras():
             if filters['size'] <= 0 or filters['size'] > 100:
                 return jsonify({'error 8': 'The size of the page must be between 1 and 100'}), 400
 
-            orders_tuple = order_service.OrderService.list_orders(filters['size'], filters['page'])
+            # CASE: No filter applied
+            if filters is None: 
+                orders_tuple = order_service.OrderService.list_orders(filters['size'], filters['page'])
+            else:
+                orders_tuple = order_service.OrderService.list_orders_with_filters(filters)    
 
             # Access to the Tuple elements of orders
             order_list = orders_tuple[0]

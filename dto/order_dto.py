@@ -54,7 +54,10 @@ class OrderResponseDTO(BaseModel):
      def from_orm(cls, order):
           try:
                # String conversion of OrderStatus
-               status_str = order.status.value if hasattr(order.status, 'value') else str(order.status)
+               if hasattr(order.status, 'value'):
+                    status_enum = OrderStatus(order.status.value)
+               else:
+                    status_enum = OrderStatus(str(order.status))
 
                # Management of created_at
                if order.created_at is None:
@@ -72,7 +75,7 @@ class OrderResponseDTO(BaseModel):
                     ),
                     items=[OrderItemDTO.from_orm(item) for item in order.items],
                     createdAt=created_at_str,
-                    status=status_str,
+                    status=status_enum,
                     total=float(order.total)
                )
           except Exception as e:
