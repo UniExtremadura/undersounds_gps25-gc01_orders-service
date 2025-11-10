@@ -12,6 +12,9 @@ info:
 
 servers:
   - url: /api/v1/ #https://undersounds.com/api/v1 --> Produccion
+    description: Servidor local de desarrollo
+  - url: https://undersounds.com/api
+    description: Servidor de produccion
 
 tags:
   - name: order
@@ -78,6 +81,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrdersPage'
+        '400':
+          description: Parámetros de paginacion inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidPage:
+                  summary: Página inválida
+                  value:
+                    code: 400
+                    message: "La pagina debe de ser mayor o igual a 0"
+                invalidSize:
+                  summary: Tamaño inválido
+                  value:
+                    code: 400
+                    message: "El tamaño de la página debe de ser mayor o igual a 20"     
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          description: Error interno del Servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'                       
 
     post:
       tags:
@@ -85,7 +113,10 @@ paths:
       summary: Crear una nueva compra
       operationId: "controllers.order_controller.create_order"
       #operationId: "createOrder"
-      description: Permite crear una compra con los productos indicados. Requiere JWT.
+      description: |
+        Permite crear una compra con los productos indicados.
+        La compra se crea con el estado PENDING.
+        Requiere JWT.
       security:
         - bearerAuth: [ ]
       requestBody:
@@ -94,6 +125,21 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              singleItem:
+                summary: Compra con un producto
+                value:
+                  items:
+                    - productId: "550e8400-e29b-41d4-a716-446655440000"  
+                      quantity: 2
+              multipleItems:
+                summary: Compra de varios productos
+                value:
+                  items:
+                    - productId: "550e8400-e29b-41d4-a716-446655440000"
+                      quantity: 2
+                    - productId:   "660e8400-e29b-41d4-a716-446655440001"
+                      quantity: 3     
 
       responses:
         '201':
@@ -128,6 +174,12 @@ paths:
                   value:
                     code: 404
                     message: "El artículo 550e8400-e29b-41d4-a716-446655440000 no existe"
+        '500':
+          description: Error interno del Servicio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'            
 
   /orders/{orderId}:
     get:
@@ -159,6 +211,12 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/OrderNotFoundError'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'  
 
     patch:
       tags:
@@ -206,6 +264,12 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/OrderNotFoundError'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'  
 
     delete:
       tags:
@@ -241,6 +305,155 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/OrderNotFoundError'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'  
+
+  /orders/{orderId}/confirm:
+    post:
+      tags:
+        - order
+      summary: Confirmar y procesar una compra
+      operationId: "controllers.order_controller.confirm_order"
+      description: |
+        Confirma una compra realizando las siguientes operaciones:
+        1. Verifica que la orden exista y esté en estado PENDING
+        2. Verifica disponibilidad de stock para todos los productos
+        3. Procesa el pago a través del servicio de pagos
+        4. Actualiza el stock de los productos (con rollback si falla)
+        5. Marca la orden como PAID
+        
+        Requiere JWT.
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          description: ID público de la compra a confirmar.
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        description: Datos necesarios para procesar el pago
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_method
+              properties:
+                payment_method:
+                  type: string
+                  enum:
+                    - PLATFORM_BALANCE
+                    - CREDIT_CARD
+                    - PAYPAL
+                  description: Método de pago a utilizar
+                  example: "PLATFORM_BALANCE"
+            examples:
+              platformBalance:
+                summary: Pago con saldo de la plataforma
+                value:
+                  payment_method: "PLATFORM_BALANCE"
+              creditCard:
+                summary: Pago con tarjeta de crédito
+                value:
+                  payment_method: "CREDIT_CARD"
+      responses:
+        '200':
+          description: Compra confirmada y procesada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: La orden no puede ser confirmada o faltan datos de pago.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notConfirmable:
+                  summary: Orden no confirmable
+                  value:
+                    error: "La orden 550e8400-e29b-41d4-a716-446655440000 no puede ser confirmada"
+                missingPaymentData:
+                  summary: Datos de pago faltantes
+                  value:
+                    error: "Datos de pago requeridos"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '402':
+          description: Error en el procesamiento del pago.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                paymentFailed:
+                  summary: Pago fallido
+                  value:
+                    error: "Error en el procesamiento del pago"
+                    details: "Saldo insuficiente"
+        '404':
+          $ref: '#/components/responses/OrderNotFoundError'
+        '409':
+          description: Stock insuficiente para algunos productos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Stock insuficiente para algunos productos"
+                  details:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product_id:
+                          type: string
+                        available:
+                          type: boolean
+                        current_stock:
+                          type: integer
+                        required:
+                          type: integer
+              examples:
+                insufficientStock:
+                  summary: Stock insuficiente
+                  value:
+                    error: "Stock insuficiente para algunos productos"
+                    details:
+                      - product_id: "550e8400-e29b-41d4-a716-446655440000"
+                        available: false
+                        current_stock: 1
+                        required: 3
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Error comunicándose con servicios externos (pagos, inventario).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                paymentServiceDown:
+                  summary: Servicio de pagos no disponible
+                  value:
+                    error: "Error en el procesamiento del pago"
+                    details: "Servicio de pagos no disponible"              
 
 components:
   securitySchemes:
@@ -248,11 +461,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Token JWT obtenido tras autenticación exitosa
 
     adminAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT  
+      description: Token JWT con rol de administrador
 
   schemas:
     Buyer:
@@ -459,23 +674,21 @@ components:
       type: object
       description: Objeto con información del error en la petición.
       required:
-        - code
-        - message
+        - error
       properties:
-        code:
-          type: integer
-          description: Código interno del error.
-          example: 400
-        message:
+        error:
           type: string
           description: Mensaje descriptivo del error.
           example: "El campo 'items' es obligatorio."
         details:
-          type: array
-          description: Información adicional sobre el error.
-          items:
-            type: string
-          example: [ "El campo 'items[0].quantity' debe ser mayor que 0" ]
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+            - type: object
+          description: Información adicional sobre el error (puede ser string, array u objeto).
+          example: "La cantidad debe ser mayor a 0"
 
   responses:
     UnauthorizedError:
@@ -489,7 +702,7 @@ components:
               summary: JWT inválido o ausente
               value:
                 code: 401
-                message: "No autorizado"
+                message: "Token requerido para realizar la operacion"
 
     OrderNotFoundError:
       description: Compra no encontrada.
