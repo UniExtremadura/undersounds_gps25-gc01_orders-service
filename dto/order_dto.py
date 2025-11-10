@@ -1,12 +1,12 @@
 from datetime import date
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from model.order_model_ import OrderStatus
 from datetime import datetime
+from typing import Literal, List
 
 class BuyerDTO(BaseModel):
      name: str
      username: str
-
 
 class SellerDTO(BaseModel):
      name: str
@@ -87,17 +87,37 @@ class CreateOrderItemRequestDTO(BaseModel):
      quantity: int
 
      @field_validator('quantity')
+     @classmethod
      def quantity_must_be_positive(cls, v):
-          if v <= 0:
+          if v <= 0 or v > 100:
                raise ValueError('La cantidad debe ser mayor a 0')
           return v
 
 class CreateOrderRequestDTO(BaseModel):
+
      items: list[CreateOrderItemRequestDTO]
+
+     @field_validator('items')
+     @classmethod
+     def items_must_have_valid_length(cls, v):
+          if len(v) < 1:
+               raise ValueError('Debe haber al menos 1 item en la compra')
+          if len(v) > 50:
+               raise ValueError('No se puede comprar a la vez más de 50 productos')
+          return v
+     
+     @model_validator(mode='after')
+     def validate_no_duplicates(self):
+          products_id = [item.productId for item in self.items]
+          if len(products_id) != len(set(products_id)):
+               raise ValueError('Se han detectado productos duplicados, no se puede permitir')
+          return self 
 
 class OrderPageDTO(BaseModel):
      content: list[OrderResponseDTO]
      totalElements: int
      totalPages: int
+     page: int
+     size: int
 
      model_config = ConfigDict(from_attributes=True)

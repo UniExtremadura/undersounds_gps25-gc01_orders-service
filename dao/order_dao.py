@@ -1,34 +1,12 @@
 from model.order_model_ import Order, OrderItem, OrderStatus
 from typing import Optional, Tuple, List
 from sqlalchemy import desc
-import datetime
+from datetime import datetime
 from db import db
 import math
 
 class OrderDAO:
-    
-    @staticmethod
-    def get_all(size: int, page: int) -> Optional[Tuple[List[Order], int, int]]:
 
-        base_query = Order.query
-
-        total_elementos = base_query.count()
-
-        # CASE: No elements in table orders
-        if total_elementos == 0:
-            return [], total_elementos, 0
-        
-
-        orders = Order.query.order_by(desc(Order.created_at))\
-                        .offset(size * page) \
-                        .limit(size) \
-                        .all()
-        
-        total_pagina = math.ceil(total_elementos / size) if size > 0 else 0
-
-        return orders, total_elementos, total_pagina
-    
-    
     @staticmethod
     def find_by_public_id(public_id: str) -> Optional[Order]:
         """Encontrar un Order con un ID público"""
@@ -121,6 +99,76 @@ class OrderDAO:
         return query
     
     @staticmethod
+    def get_all_no_delivered() -> Optional[List[Order]]:
+        
+        try:
+
+            orders = Order.query.filter(
+                Order.status.in_([OrderStatus.PENDING, OrderStatus.PAID])
+            ).all()
+
+            return orders if orders else None
+
+        except Exception as e:
+            print(f"Error en get_all_no_delivered: {e}")
+            return None    
+
+    @staticmethod
+    def mark_order_as_paid(order_id: str) -> Optional[Order]:
+
+        order = OrderDAO.find_by_public_id(order_id)
+        if not order:
+            raise Exception(f"Order {order_id} no encontrado")
+
+        # Actualizo estado y timestamp de confirmacion
+        order.status = OrderStatus.PAID
+        order.updated_at = datetime.now()    
+        
+        db.session.commit()
+
+        # Refrescar el contenido del order actualizado 
+        db.session.refresh(order)
+
+        return order
+    
+    @staticmethod
+    def get_all(size: int, page: int) -> Optional[Tuple[List[Order], int, int]]:
+
+        base_query = Order.query
+
+        total_elementos = base_query.count()
+
+        # CASE: No elements in table orders
+        if total_elementos == 0:
+            return [], total_elementos, 0
+        
+
+        orders = Order.query.order_by(desc(Order.created_at))\
+                        .offset(size * page) \
+                        .limit(size) \
+                        .all()
+        
+        total_pagina = math.ceil(total_elementos / size) if size > 0 else 0
+
+        return orders, total_elementos, total_pagina
+    
+
+    @staticmethod
+    def get_by_id(order_id: str) -> Optional[Order]:
+        return Order.query.filter(Order.public_id == order_id)
+    
+    @staticmethod
+    def add_order(order: Order, username: str) -> Order:
+        try:
+            order.made_by_username = username
+            db.session.add(order)
+            db.session.commit()
+            return order
+        except Exception as e:
+            db.session.rollback()
+            raise e
+
+    @staticmethod
     def update_by_public_id(public_id: str, update_data: dict) -> Optional[Order]:
         try:
             order_encontrado = OrderDAO.find_by_public_id(public_id)
@@ -143,8 +191,8 @@ class OrderDAO:
             return None
         except Exception as e:
             db.session.rollback()
-            raise e    
-    
+            raise e                
+
     @staticmethod
     def get_orders_by_seller(seller: str, 
                              page: int=0, 
