@@ -15,6 +15,7 @@ order_bp = Blueprint('order_bp', __name__)
 #@token_required -> Validate user token
 @log('../logs/ficherosalida.log')
 def proccess_orders_by_id(orderId: str):
+    """Responde al cliente con la información de las compras relacionadas con el id solicitado"""
     try:
         # Llamo al servicio para buscar compras que coincidan con orderId
         order = order_service.OrderService.find_order(orderId)
@@ -91,6 +92,7 @@ def update_order_by_id(orderId: str):
 @token_required    #-> Validate user token
 @log('../logs/ficherosalida.log')
 def procesar_compras():
+    """Responde al cliente con información completa de todas las compras realizadas o por filtros"""
     filters = {}
     orders_tuple = None
     try:
