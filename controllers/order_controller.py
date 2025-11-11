@@ -145,6 +145,7 @@ def procesar_compras():
 #@role_validator('admin') -> Validate if the user requester is registered as an admin to do this operation
 @log('../logs/ficherosalida.log')
 def create_order():
+    """Responde al usuario con la información de compra que acaba de crear"""
     try:
         # Obtain data from the request
         data = request.get_json()
@@ -152,6 +153,7 @@ def create_order():
             return jsonify({'error': 'Datos json no requeridos'}), 400
         
         # Validate data request with Pylantic
+        # Data must have items and not duplicates - products | This DTO validates it
         data_validated = CreateOrderRequestDTO.model_validate(data)
 
         # Get user from JWT, now is hardcoded
