@@ -1,15 +1,18 @@
 from flask import Flask
-from flask_swagger_ui import get_swaggerui_blueprint
-from config import Config
+from config import Config, EurekaConfig
 from routes import register_blueprints, register_swagger
 from db import db
 from auth.keycloak_config import init_keycloak
+from clients import init_client
 
 def create_app(config_class=Config):
     """Factory function to create Flask App"""
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
+
+    # Initialize clients
+    init_client(app)
+
     # Initialize extensions
     initialize_extensions(app)
     
@@ -21,8 +24,13 @@ def create_app(config_class=Config):
     
     # Registry handler errors
     register_error_handlers(app)
+
+    #Subscription into Eureka's server
+    #EurekaConfig.init_eureka(app)
     
     return app
+
+
 
 def initialize_extensions(app):
     """Initialize Flask Extensions"""
