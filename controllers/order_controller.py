@@ -191,3 +191,30 @@ def create_order():
             'error': 'Error interno del servidor',
             'details': str(e)
         }), 500
+    
+@order_bp.route('/orders/<string:orderId>', methods=['DELETE'])
+#@token_required -> Validate user token
+@log('../logs/ficherosalida.log')   
+def delete_order_by_id(orderId: str):
+    try: 
+        deleted = order_service.OrderService.delete(orderId)
+
+        if deleted:
+            return Response(
+                response="Compra eliminada correctamente",
+                status=204,
+                mimetype='application/json'
+            )
+        else:
+            return Response(
+                response = f"La compra {orderId} no existe",
+                status = 404,
+                mimetype = 'application/json'
+            )
+        
+    except ValueError as e:
+        logger.warning(f"Error de validación: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error interno: {str(e)}")
+        return jsonify({'error': str(e)}), 500      
