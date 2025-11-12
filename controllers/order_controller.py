@@ -15,6 +15,7 @@ order_bp = Blueprint('order_bp', __name__)
 #@token_required -> Validate user token
 @log('../logs/ficherosalida.log')
 def proccess_orders_by_id(orderId: str):
+    """Responde al cliente con la información de las compras relacionadas con el id solicitado"""
     try:
         # Llamo al servicio para buscar compras que coincidan con orderId
         order = order_service.OrderService.find_order(orderId)
@@ -91,6 +92,7 @@ def update_order_by_id(orderId: str):
 @token_required    #-> Validate user token
 @log('../logs/ficherosalida.log')
 def procesar_compras():
+    """Responde al cliente con información completa de todas las compras realizadas o por filtros"""
     filters = {}
     orders_tuple = None
     try:
@@ -143,6 +145,7 @@ def procesar_compras():
 #@role_validator('admin') -> Validate if the user requester is registered as an admin to do this operation
 @log('../logs/ficherosalida.log')
 def create_order():
+    """Responde al usuario con la información de compra que acaba de crear"""
     try:
         # Obtain data from the request
         data = request.get_json()
@@ -150,6 +153,7 @@ def create_order():
             return jsonify({'error': 'Datos json no requeridos'}), 400
         
         # Validate data request with Pylantic
+        # Data must have items and not duplicates - products | This DTO validates it
         data_validated = CreateOrderRequestDTO.model_validate(data)
 
         # Get user from JWT, now is hardcoded
@@ -187,3 +191,31 @@ def create_order():
             'error': 'Error interno del servidor',
             'details': str(e)
         }), 500
+    
+@order_bp.route('/orders/<string:orderId>', methods=['DELETE'])
+#@token_required -> Validate user token
+@log('../logs/ficherosalida.log')   
+def delete_order_by_id(orderId: str):
+    try: 
+        deleted = order_service.OrderService.delete(orderId)
+
+        if deleted:
+            # Response verifying to user that the order was successfuly deleted
+            return Response(
+                response="Compra eliminada correctamente",
+                status=204,
+                mimetype='application/json'
+            )
+        else:
+            return Response(
+                response = f"La compra {orderId} no existe",
+                status = 404,
+                mimetype = 'application/json'
+            )
+        
+    except ValueError as e:
+        logger.warning(f"Error de validación: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error interno: {str(e)}")
+        return jsonify({'error': str(e)}), 500      

@@ -390,3 +390,7 @@ class OrderService:
     @staticmethod
     def find_order_by_seller(username: str, page: int, size: int):
         return OrderDAO.get_orders_by_seller(username, page, size)
+    
+    @staticmethod
+    def delete(public_id: str):
+        return OrderDAO.delete_order(public_id)
