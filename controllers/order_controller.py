@@ -200,6 +200,7 @@ def delete_order_by_id(orderId: str):
         deleted = order_service.OrderService.delete(orderId)
 
         if deleted:
+            # Response verifying to user that the order was successfuly deleted
             return Response(
                 response="Compra eliminada correctamente",
                 status=204,
