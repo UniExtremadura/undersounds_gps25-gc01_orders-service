@@ -6,6 +6,7 @@ from sqlalchemy import ForeignKey
 from enum import Enum
 from datetime import datetime
 
+# States that an order can be
 class OrderStatus(str, Enum):
     PENDING = "PENDING",
     PAID = "PAID",
