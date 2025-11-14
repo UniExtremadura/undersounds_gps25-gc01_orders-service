@@ -21,7 +21,7 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique = True, nullable = False, index = True)
     made_by_username = db.Column(db.String(50), nullable = False, index = True)
-    status = db.Column(db.Enum(OrderStatus), default = OrderStatus.PENDING, nullable = False)
+    status = db.Column(db.Enum(OrderStatus), default = OrderStatus.PENDING, nullable = False) # Field that saves order's status
     total = db.Column(db.Float, nullable = False)
     created_at = db.Column(db.DateTime, default = datetime.now, nullable = False)
     updated_at = db.Column(db.DateTime, default = datetime.now, onupdate = datetime.now, nullable = True)
