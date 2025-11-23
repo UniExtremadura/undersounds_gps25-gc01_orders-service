@@ -169,6 +169,22 @@ class OrderDAO:
             raise e
 
     @staticmethod
+    def delete_order(public_id: str) -> bool:   
+        try:
+            order = OrderDAO.find_by_public_id(public_id)  
+            if order:
+                db.session.delete(order) # Still present in the collection but marked as deleted.
+                db.session.commit() # Successful delete, no longer exists in the collection.
+                return True
+            else:
+                print("Orden no encontrada en la BD")
+                return False
+        except Exception as e:
+            db.session.rollback()
+            raise e
+            return False
+
+    @staticmethod
     def update_by_public_id(public_id: str, update_data: dict) -> Optional[Order]:
         try:
             order_encontrado = OrderDAO.find_by_public_id(public_id)
@@ -210,19 +226,3 @@ class OrderDAO:
         total_paginas = math.ceil(total_elementos / size) if size > 0 else 0
 
         return orders, total_elementos, total_paginas
-    
-    @staticmethod
-    def delete_order(public_id: str) -> bool:   
-        try:
-            order = OrderDAO.find_by_public_id(public_id)  
-            if order:
-                db.session.delete(order) # Still present in the collection but marked as deleted.
-                db.session.commit() # Successful delete, no longer exists in the collection.
-                return True
-            else:
-                print("Orden no encontrada en la BD")
-                return False
-        except Exception as e:
-            db.session.rollback()
-            raise e
-            return False

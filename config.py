@@ -9,14 +9,14 @@ load_dotenv()
 class Config:
     """Base config"""
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "mysql+pymysql://mendo:12345@mariadb:3306/orders_db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Keycloak
-    KEYCLOAK_SERVER_URL = os.getenv("KEYCLOAK_SERVER_URL")
-    KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_MICROSERVICE_CLIENT_ID")
-    KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM")
-    KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_MICROSERVICE_CLIENT_SECRET")
+    KEYCLOAK_SERVER_URL = os.getenv("KEYCLOAK_SERVER_URL", "http://keycloak:8080")
+    KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_MICROSERVICE_CLIENT_ID", "orders-service")
+    KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "undersounds")
+    KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_MICROSERVICE_CLIENT_SECRET", "prueba-no-real")
     
     # Application
     SERVICE_NAME = "Servicio de Compras"
@@ -27,16 +27,16 @@ class Config:
     API_URL = '/api/v1/swagger.json'
 
     # INTRA communication
-    USERS_SERVICE_URL = os.getenv("USERS_URL")
-    CONTENT_SERVICE_URL = os.getenv("CONTENT_URL")
-    PAYMENT_SERVICE_URL = os.getenv("PAYMENT_URL")
-    NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_URL")
+    USERS_SERVICE_URL = os.getenv("USERS_URL", "http://localhost:8081")
+    CONTENT_SERVICE_URL = os.getenv("CONTENT_URL", "http://content-service:8080")
+    PAYMENT_SERVICE_URL = os.getenv("PAYMENT_URL", "http://localhost:8082")
+    NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_URL", "http://localhost:8085")
 
     # Configuración de Eureka
-    EUREKA_SERVER = os.getenv('EUREKA_SERVER')
-    APP_NAME = os.getenv('APP_NAME')
-    INSTANCE_PORT = int(os.getenv('INSTANCE_PORT'))
-    INSTANCE_HOST = os.getenv('INSTANCE_HOST')
+    EUREKA_SERVER = os.getenv('EUREKA_SERVER', "http://localhost:8761")
+    APP_NAME = os.getenv('APP_NAME', 'orders-service')
+    INSTANCE_PORT = int(os.getenv('INSTANCE_PORT', '8084'))
+    INSTANCE_HOST = os.getenv('INSTANCE_HOST', 'localhost')
     HOME_PAGE_URL = 'http://localhost:5000'
     HEALTH_URL = 'http://localhost:5000/api/v1/health'
     
@@ -71,7 +71,11 @@ class EurekaConfig:
         except Exception as e:
             print(f"❌ Error obteniendo URL para {service_name}: {e}")
             return None        
- 
+
+class CircuitBreakerPersonalizado(CircuitBreaker):
+    FAILURE_THRESHOLD = 7
+    RECOVERY_TIMEOUT = 60
+    EXPECTED_EXCEPTION = requests.exceptions.RequestException    
 
 class DevelopmentConfig(Config):
     """Developement Config"""

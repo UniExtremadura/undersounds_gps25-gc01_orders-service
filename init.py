@@ -1,15 +1,20 @@
-from flask import Flask
+from flask import Flask, g
 from config import Config, EurekaConfig
 from routes import register_blueprints, register_swagger
 from db import db
 from auth.keycloak_config import init_keycloak
 from clients import init_client
+from flask_cors import CORS
+import os
 
 def create_app(config_class=Config):
     """Factory function to create Flask App"""
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Avoid CORS problems
+    CORS(app, resources={r"/*": {"origins": "*"}}) # Permite CORS para todas las rutas y orígenes
+    
     # Initialize clients
     init_client(app)
 
