@@ -97,7 +97,6 @@ class CreateOrderRequestDTO(BaseModel):
 
      items: list[CreateOrderItemRequestDTO]
 
-     # Validates the existance of items 1 - 50 in data received
      @field_validator('items')
      @classmethod
      def items_must_have_valid_length(cls, v):
@@ -107,7 +106,6 @@ class CreateOrderRequestDTO(BaseModel):
                raise ValueError('No se puede comprar a la vez más de 50 productos')
           return v
      
-     # Validates the non existance of duplicates in order's items
      @model_validator(mode='after')
      def validate_no_duplicates(self):
           products_id = [item.productId for item in self.items]

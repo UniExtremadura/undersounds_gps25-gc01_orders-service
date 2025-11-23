@@ -33,18 +33,9 @@ class PaymentClient(BaseClient):
             print(order_data)
             url = f"{self.base_url}/api/payments"
             
-            payment_payload = {
-                "purchaseId": order_data.get('public_id'),
-                "artistId": order_data.get('made_by_username'),
-                "concept": order_data.get('concep', f"Compra de {order_data.get('public_id')}"),
-                "amount": order_data.get('quantity'),
-                "payment_method": order_data.get('payment_method', 'PLATFORM_BALANCE'),
-                "status": order_data.get('status')
-            }
+            print(order_data)
 
-            print(payment_payload)
-
-            response = self._make_request('POST', url, json = payment_payload)
+            response = self._make_request('POST', url, json = order_data)
             #baseUrl = self._get_user_service_url() -> Eureka
             logger.info(f"Enviado pago al microservicio: {url}")
 

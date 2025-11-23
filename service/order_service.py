@@ -77,7 +77,6 @@ class OrderService:
         if not OrderService.is_order_updatable(order_id):
             return None
 
-        print("Puedo")
         return OrderDAO.update_by_public_id(order_id, update_data)
     
     @staticmethod
@@ -92,13 +91,21 @@ class OrderService:
     
     @staticmethod
     def is_order_confirm(orderId: str) -> bool:
-
         order_confirm = OrderDAO.find_by_public_id(orderId)
-
         if not order_confirm:
             return False
         
         return order_confirm.status is OrderStatus.PENDING
+    
+    @staticmethod
+    def is_order_paid(orderId: str) -> bool:
+
+        order_paid = OrderDAO.find_by_public_id(orderId)
+
+        if not order_paid:
+            return False
+        
+        return order_paid.status is OrderStatus.PAID
     
     @staticmethod
     def check_stock_availability(order_id: str) -> dict:
@@ -109,14 +116,15 @@ class OrderService:
             order = OrderService.find_order(order_id)
             if not order:
                 raise OrderNotFoundException(f"Orden {order_id} no encontrada")
-            
+            logger.info(f"Order para verificar el stock de sus productos: {order}")
+            print(order)
             availability_check = []
             
             for item in order.items:
-                
+                print(item)
                 try:
-
-                    stock_response = content_client.get_product_stock_by_id(item.product_public_id)
+                    # Get product stock from content client response
+                    stock_response = content_client.get_product_stock_by_id("6b2bf8bd-649c-465c-b803-eebc9fd6ff6c")
                     if not stock_response or not stock_response.get('success') is True:
                         availability_check.append({
                             'product_id': item.product_public_id,
@@ -184,7 +192,7 @@ class OrderService:
         return OrderDAO.get_all(size, page)
     
     @staticmethod
-    def update_product_stock(order_id: str) -> dict:
+    def update_product_stock(order_id: str, revertir: bool) -> dict:
 
         """
         Solicita al microservicio de contenido que actualice el stock del producto
@@ -199,34 +207,41 @@ class OrderService:
             results = [] # Almacenará los resultados que arroja el microservicio de contenido
             successful_updates = [] # Almacenará todos los resultados exitosos que arroka el microservicio de contenido
             for item in order.items:
-                try: 
-                    stock_result = content_client.update_product_stock_by_id(
-                        item.product_public_id,
-                        -item.quantity)
-                    
-                    if stock_result is None:
+                try:
+                    print(item.product_public_id, flush=True) 
+                    if not revertir:
+                        stock_result = content_client.update_product_stock_by_id(
+                            "6b2bf8bd-649c-465c-b803-eebc9fd6ff6c",
+                            -item.quantity)
+                        print(f"Stock result: {stock_result}")
+                        
+                        if stock_result is None:
+                            results.append({
+                                'product_id': item.product_public_id,
+                                'success': False,
+                                'error': 'Servicio de contenido no disponible'
+                            })
+
+                        success = stock_result.get('success', False)
+
                         results.append({
                             'product_id': item.product_public_id,
-                            'success': False,
-                            'error': 'Servicio de contenido no disponible'
+                            'success': success,
+                            'error': stock_result.get('error') if not success else None
                         })
 
-                    success = stock_result.get('success', False)
-
-                    results.append({
-                        'product_id': item.product_public_id,
-                        'success': success,
-                        'error': stock_result.get('error') if not success else None
-                    })
-
-                    if success: 
-                        successful_updates.append({
-                            'product_id': item.product_public_id,
-                            'quantity_changed': item.quantity
-                        })
+                        if success: 
+                            successful_updates.append({
+                                'product_id': item.product_public_id,
+                                'quantity_changed': item.quantity
+                            })
+                        else:
+                            OrderService._rollback_stock_updates(content_client, successful_updates) # Desacemos los que se hayan actualizado
+                            break # No nos interesa seguir actualizando si uno ya ha fallado
                     else:
-                        OrderService._rollback_stock_updates(content_client, successful_updates) # Desacemos los que se hayan actualizado
-                        break # No nos interesa seguir actualizando si uno ya ha fallado    
+                        stock_result = content_client.update_product_stock_by_id(
+                            "6b2bf8bd-649c-465c-b803-eebc9fd6ff6c",
+                            +item.quantity)      
                 except Exception as e:
                     logger.error(f"Error actualizando stock de {item.product_public_id}: {e}")
                     results.append({
@@ -359,38 +374,77 @@ class OrderService:
             if not order:
                 raise OrderNotFoundException("order_id", f"Compra con id {order_id} no encontrada")
             
-            payment_result = payment_client.procesamiento_pagos(order_data)
+            # Agrupamos datos de compra cuyos valores de comprador en su producto sean el mismo
+            pagos_por_vendedor = {}
 
-            if payment_result is None:
-                raise PaymentProcessingException("Servicio de pagos no disponible")
+            for item in order.items:
+                seller_key = item.seller_username # Uso de seller_username para la consistencia
 
-            if payment_result['success'] and payment_result['status'] == 'COMPLETED':
-                order_info = OrderDAO.mark_order_as_paid(order_id)
-                
-                return {
-                    'success': True,
-                    'payment_id': payment_result['payment_id'],
-                    'status': payment_result['status'],
-                    'message': 'Pago realizado exitosamente',
-                    'transaction_data': order_info
+                if seller_key not in pagos_por_vendedor:
+                    pagos_por_vendedor[seller_key] = {
+                        'artistName': item.seller_name,
+                        'amount': 0.0,
+                        'concept': [] # Para generar un concepto detallado si es necesario
+                    }
+                # Actualizamos el amount y el concepto
+                pagos_por_vendedor[seller_key]['amount'] += item.total
+                pagos_por_vendedor[seller_key]['concept'].append(item.product_name)  
+
+            purchase_id = order_id
+
+            # Iterar y notificar el pago
+            for seller_username, data in pagos_por_vendedor.items():
+                # Comunicación con el microservicio de usuarios para obtener su id, en base a su nombre
+                #artist_id = user_client.get_seller_by_username(seller_username) # Produccion
+                artist_id = "1c3c7bfd-7f05-4c9e-b308-b708aea49242"
+
+                payment_dto = {
+                    'purchaseId': purchase_id,
+                    'artistId': artist_id,
+                    'artistName': data['artistName'],
+                    'concept': f"Venta de: {', '.join(data['concept'][:2])}...", # Une varios nombres de items en una cadena y solo coge los dos primeros, evita conceptos grandes
+                    'paymentDate': datetime.now().isoformat(),
+                    'amount': data['amount'],
+                    'paymentMethod': order_data.get("payment_method"),
+                    'status': "PENDING"
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': payment_result.get('error'),
-                    'message': 'Error en el procesamiento de pagos'
-                }
 
+                payment_result = payment_client.procesamiento_pagos(payment_dto)
+
+                if payment_result is None:
+                    raise PaymentProcessingException("Servicio de pagos no disponible")
+
+                if payment_result['success'] and payment_result['status'] == 'COMPLETED':
+                    order_info = OrderDAO.mark_order_as_paid(order_id)
+                    
+                    return {
+                        'success': True,
+                        'payment_id': payment_result['payment_id'],
+                        'status': payment_result['status'],
+                        'message': 'Pago realizado exitosamente',
+                        'transaction_data': order_info
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': payment_result.get('error'),
+                        'message': 'Error en el procesamiento de pagos'
+                    }
+         
         except (OrderNotFoundException, PaymentProcessingException):
             raise    
         except Exception as e:
             logger.error(f"Error procesando pago de orden: {str(e)}")
             raise ProductNotFoundException(f"Error procesando pago: {str(e)}")    
-    
-    @staticmethod
-    def find_order_by_seller(username: str, page: int, size: int):
-        return OrderDAO.get_orders_by_seller(username, page, size)
+
+
+
     
     @staticmethod
     def delete(public_id: str):
         return OrderDAO.delete_order(public_id)
+    
+    @staticmethod
+    def find_order_by_seller(username: str, page: int, size: int):
+        return OrderDAO.get_orders_by_seller(username, page, size)
+
