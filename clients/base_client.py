@@ -21,7 +21,7 @@ class BaseClient:
         """Obtener token JWT (con cache simple)"""
         with self._token_lock:
             if not self._token:
-                self._token = self.keycloak_service._get_token()
+                self._token = self.keycloak_service._get_token("content-service", "ehAIzr9YpKeHPoqZV2ealDY0gkYE50wy")
             return self._token
     
     def _refresh_token(self):
@@ -45,7 +45,26 @@ class BaseClient:
     
     def _make_request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
         """Realizar request con manejo de token"""
+        
+        url = url.strip()  # Elimina espacios y caracteres de control al inicio/final
+        url = ''.join(char for char in url if ord(char) >= 32)  # Elimina caracteres de control
+
         headers = self._get_headers()
+        
+        print("\n========== REQUEST DEBUG ==========", flush=True)
+        print("METHOD:", method, flush=True)
+        print("URL:", url, flush=True)
+        print("HEADERS:", headers, flush=True)
+        print("KWARGS:", kwargs, flush=True)
+
+        if "json" in kwargs:
+            print("JSON BODY:", kwargs["json"], flush=True)
+        if "data" in kwargs:
+            print("DATA BODY:", kwargs["data"], flush=True)
+        if "params" in kwargs:
+            print("QUERY PARAMS:", kwargs["params"], flush=True)
+
+        print("===================================\n", flush=True)
 
         try:
 
@@ -73,5 +92,5 @@ class BaseClient:
             return response
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error en request a {url}: {e}")
+            logger.error(f"Error en request a {url} , error: {e}")
             return None

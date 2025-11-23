@@ -12,29 +12,33 @@ class KeycloakService:
         self.client_id = app.config.get('KEYCLOAK_CLIENT_ID')
         self.client_secret = app.config.get('KEYCLOAK_CLIENT_SECRET')
 
-    def _get_token(self) -> Optional[Dict]:
+    def _get_token(self, client_id, client_secret) -> Optional[Dict]:
         try:
+
             token_url = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect/token"
-            
+            print(f"Token url: {token_url}")
             payload = {
-                'grant_type': 'client_credentials',
-                'client_id': self.client_id,
-                'client_secret': self.client_secret
+                'grant_type': 'client_credentials', # Para rol de internal_service
+                'client_id': client_id,
+                'client_secret': client_secret,
             }
             
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
-            
+            print(f"Payload: {payload}")
             response = requests.post(
                 token_url,
                 data=payload,
                 headers=headers,
                 timeout=10
             )
-            response.raise_for_status()
+
+            if response.status_code != 200:
+                raise Exception(f"Error obteniendo token del servicio: {response.text}")
             
             token_data = response.json()
+            print(token_data['access_token'], flush=True)
             return token_data['access_token']
             
         except requests.exceptions.RequestException as e:
