@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 order_bp = Blueprint('order_bp', __name__)
 
 @order_bp.route('/orders/<string:orderId>', methods=['GET'])
-#@token_required()  #-> Validate user token
+@token_required(roles=['artist', 'internal_service'])  #-> Validate user token
 @log('../logs/ficherosalida.log')
 def proccess_orders_by_id(orderId: str):
     try:
@@ -41,7 +41,7 @@ def proccess_orders_by_id(orderId: str):
         return jsonify({'message': str(e)}), 500
     
 @order_bp.route('/orders/<string:orderId>', methods=['PATCH'])
-#@token_required(roles=['artist']) #-> Validate user token
+@token_required(roles=['artist', 'internal_service']) #-> Validate user token
 @log('../logs/ficherosalida.log')
 def update_order_by_id(orderId: str):
     try:
@@ -85,7 +85,7 @@ def update_order_by_id(orderId: str):
         return jsonify({'error': str(e)}), 500    
     
 @order_bp.route('/orders/<string:orderId>', methods=['DELETE'])
-#@token_required() #-> Validate user token
+@token_required(roles=['artist', 'internal_service']) #-> Validate user token
 @log('../logs/ficherosalida.log')   
 def delete_order_by_id(orderId: str):
     try: 
@@ -113,7 +113,7 @@ def delete_order_by_id(orderId: str):
 
 
 @order_bp.route('/orders', methods=['GET'])
-#@token_required()    #-> Validate user token
+@token_required(roles=['artist', 'internal_service'])    #-> Validate user token
 @log('../logs/ficherosalida.log')
 def procesar_compras():
     filters = {}
@@ -164,7 +164,7 @@ def procesar_compras():
         return jsonify({'message': str(e)}), 500
 
 @order_bp.route('/orders', methods=['POST'])
-#@token_required('admin') #-> Validate user token
+@token_required(roles=['artist', 'internal_service']) #-> Validate user token
 @log('../logs/ficherosalida.log')
 def create_order():
     try:
@@ -218,7 +218,7 @@ def create_order():
         }), 500
     
 @order_bp.route('/orders/<string:orderId>/confirm', methods=['POST'])
-@token_required() # -> Validate user token
+@token_required(roles=['artist', 'internal_service']) # -> Validate user token
 @log('../logs/ficherosalida.log')
 def confirm_order(orderId: str):
     """
