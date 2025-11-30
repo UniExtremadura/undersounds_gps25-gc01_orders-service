@@ -453,7 +453,63 @@ paths:
                   summary: Servicio de pagos no disponible
                   value:
                     error: "Error en el procesamiento del pago"
-                    details: "Servicio de pagos no disponible"              
+                    details: "Servicio de pagos no disponible"     
+  
+  /orders/stats/lambda:
+    get:
+      tags:
+        - order
+      summary: Obtener estadísticas de microservicio a través de AWS
+      operationId: controllers.order_controller.get_statistics_orders
+      description: |
+        Obtiene las estadísticas generales del microservicio:  
+        1. Realiza una llamada REST al desencadenador API Gateway  
+        2. El API Gateway ejecuta una función Lambda AWS  
+        3. Retorno de datos obtenidos por la función Lambda AWS
+
+        Requiere JWT.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: days
+          required: true
+          description: Instante de día en el que se quieren obtener las estadísticas
+          schema:
+            type: integer
+            format: int64
+            example: 5
+      responses:
+        '200':
+          description: Estadísticas recuperadas desde AWS correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LambdaResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '400':
+          description: Error en los parámetros de la request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "Error al enviar parámetros"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+
+                              
 
 components:
   securitySchemes:
@@ -470,6 +526,49 @@ components:
       description: Token JWT con rol de administrador
 
   schemas:
+
+    LambdaResponse:
+      type: objet
+      description: Información de la respuesta AWS
+      properties:
+        average_order_value:
+          type: float
+          description: Media de coste de los productos de la compra
+          example: 30.03
+        generated_at:
+          type: string
+          format: date-time
+          description: Instante de tiempo en el que se realizó la peticion
+          example: "\"2025-11-24T17:29:58.797537\""
+        lambda_invoked:
+          type: boolean
+          description: Indicador si la respuesta recibida ha sido mandada por la función lambda
+          example: true
+        message:
+          type: string
+          description: Mensaje indicando quién ha ejecutado la función lambda
+          example: Lambda ejecutada via API Gateway
+        most_common_status: 
+          type: string
+          description: Estado medio de las compras procesadas
+          example: PAID
+        period:
+          type: string
+          description: Instante de tiempo en el que se ha realizado la consulta
+          example: last_5_days
+        total_orders:
+          type: int64
+          description: Total de compras procesadas 
+          example: 15
+        total_spent:
+          type: float
+          description: Total de dinero gastado en ese instante de tiempo consultado
+          example: 450.5
+        username:
+          type: string
+          description: Nombre del usuario que ha realizado la consulta
+          example: undersounds-user 
+
     Buyer:
       type: object
       description: Información del comprador.

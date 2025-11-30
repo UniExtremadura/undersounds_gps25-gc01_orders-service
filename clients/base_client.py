@@ -27,7 +27,7 @@ class BaseClient:
     def _refresh_token(self):
         """Forzar refresh del token"""
         with self._token_lock:
-            self._token = self.keycloak_service.get_service_token()
+            self._token = self.keycloak_service._get_token();
     
     def _get_headers(self) -> dict:
         """Headers con JWT para requests a otros microservicios"""

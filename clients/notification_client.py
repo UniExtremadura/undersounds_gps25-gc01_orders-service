@@ -16,13 +16,12 @@ class NotificationClient(BaseClient):
         self.timeout = 5
 
     @circuit(cls=CircuitBreakerPersonalizado)
-    def realizar_notificacion(self):
+    def realizar_notificacion(self, contenido: dict):
         """Envía una notificación de acción realizada"""
         try:
-            # Introducir la url del post de notificaciones 
-            url = f""
+            url = f"{self.base_url}/"
 
-            response = self._make_request('POST', url)
+            response = self._make_request('POST', url, json = contenido)
 
             if response.status_code == 404:
                 return None

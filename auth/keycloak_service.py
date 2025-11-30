@@ -16,7 +16,7 @@ class KeycloakService:
         try:
 
             token_url = f"{self.server_url}/realms/{self.realm}/protocol/openid-connect/token"
-            print(f"Token url: {token_url}")
+
             payload = {
                 'grant_type': 'client_credentials', # Para rol de internal_service
                 'client_id': client_id,
@@ -26,7 +26,7 @@ class KeycloakService:
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
-            print(f"Payload: {payload}")
+
             response = requests.post(
                 token_url,
                 data=payload,
@@ -38,7 +38,7 @@ class KeycloakService:
                 raise Exception(f"Error obteniendo token del servicio: {response.text}")
             
             token_data = response.json()
-            print(token_data['access_token'], flush=True)
+
             return token_data['access_token']
             
         except requests.exceptions.RequestException as e:

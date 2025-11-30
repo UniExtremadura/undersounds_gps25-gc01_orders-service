@@ -49,13 +49,10 @@ class ContentClient(BaseClient):
     def  get_product_stock_by_id(self, product_id: str) -> Optional[dict]:
         try:
             url = f"{self.base_url}/products/public/{product_id}"
-            print(self.app.config.get('CONTENT_SERVICE_URL'))
-            print(url)
 
             response = self._make_request('GET', url)
 
             data = response.json()
-            print(data, flush=True)
 
             if data.get('success') is True:
                 return {

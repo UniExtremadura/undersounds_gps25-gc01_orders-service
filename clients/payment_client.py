@@ -30,11 +30,8 @@ class PaymentClient(BaseClient):
         """
         try:
             
-            print(order_data)
             url = f"{self.base_url}/api/payments"
             
-            print(order_data)
-
             response = self._make_request('POST', url, json = order_data)
             #baseUrl = self._get_user_service_url() -> Eureka
             logger.info(f"Enviado pago al microservicio: {url}")

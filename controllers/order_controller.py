@@ -3,11 +3,55 @@ from service import order_service
 from dto.order_dto import OrderResponseDTO, OrderPageDTO, CreateOrderRequestDTO
 from decorator.tokenDecorator import token_required
 from decorator.logRequestDecorator import log
+from datetime import datetime
+from helpers.ApiExceptions import APIException
+import json
+import requests
+import boto3
 import logging
+
 
 logger = logging.getLogger(__name__)
 
 order_bp = Blueprint('order_bp', __name__)
+
+lambda_client = boto3.client('lambda', region_name = 'us-east-1')
+
+@order_bp.route('/orders/stats/lambda', methods=['GET'])
+@token_required(roles=['artist', 'internal_service'])
+@log('../logs/ficherosalida.log')
+def get_statistics_orders():
+    """
+    Invoca Lambda a través de API Gateway (funciona en cuentas educativas)
+    """
+    try:
+        days = request.args.get('days', 7, type=int)
+        username = request.user_claims.get('username')
+        
+        api_gateway_url = "https://jf9o4ntpik.execute-api.us-east-1.amazonaws.com/default/OrderStatisticsFunction"
+        
+        # Llamar a API Gateway
+        response = requests.get(api_gateway_url, params={
+            'days': days,
+            'username': username
+        })
+        
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Error en Lambda via API Gateway',
+                'status_code': response.status_code
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error invocando Lambda via API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Servicio de estadísticas temporalmente no disponible',
+            'fallback_mode': 'active'
+        }), 503
 
 @order_bp.route('/orders/<string:orderId>', methods=['GET'])
 @token_required(roles=['artist', 'internal_service'])  #-> Validate user token
@@ -16,29 +60,27 @@ def proccess_orders_by_id(orderId: str):
     try:
         # Llamo al servicio para buscar compras que coincidan con orderId
         order = order_service.OrderService.find_order(orderId)
+        if order is None:
 
-        if order:
-            order_dict = order_service.OrderService.order_to_dict(order)
-            # Validate the entry Order with Pydantic. Converting SQLAlchemy obj -> Pydantic DTO
-            orderDTO = OrderResponseDTO.model_validate(order_dict)
-            return Response(
-                orderDTO.model_dump_json(),
-                status=200,
-                mimetype='application/json'
+            raise APIException(
+                message=f"La orden {orderId} no existe",
+                status=404,
+                error="Not Found"
             )
-        else:
-            return Response(
-                response = f"La compra {orderId} no existe",
-                status = 404,
-                mimetype = 'application/json'
-            )
+        
+        order_dict = order_service.OrderService.order_to_dict(order)
+        # Validate the entry Order with Pydantic. Converting SQLAlchemy obj -> Pydantic DTO
+        orderDTO = OrderResponseDTO.model_validate(order_dict)
+
+        return Response(
+            orderDTO.model_dump_json(),
+            status=200,
+            mimetype='application/json'
+        )
 
     except ValueError as e:
         logger.warning(f"Error de validación: {str(e)}")
         return jsonify({'message': str(e)}), 400
-    except Exception as e:
-        logger.error(f"Error interno: {str(e)}")
-        return jsonify({'message': str(e)}), 500
     
 @order_bp.route('/orders/<string:orderId>', methods=['PATCH'])
 @token_required(roles=['artist', 'internal_service']) #-> Validate user token
@@ -48,41 +90,45 @@ def update_order_by_id(orderId: str):
         data = request.get_json() # Obtenemos los datos del cuerpo de la consulta
                 
         if not data:
-            return jsonify({'error': 'Datos de actualización requeridos'}), 400
+
+            raise APIException(
+                message='Datos de actualización requeridos',
+                status=400,
+                error='Bad Request'
+            )
         
         is_updatable = order_service.OrderService.is_order_updatable(orderId)
 
         if not is_updatable:
-            return jsonify({
-                f"La orden {orderId} no existe o no se puede actualizar (ya fue enviada, cancelada o entregada)"
-            }), 400
+
+            raise APIException(
+                message=f"La orden {orderId} no exite o no se puede actualizar (ya fue enviada, cancelada o entregada)",
+                status=400,
+                error='Bad Request'
+            )
         
         order_update = order_service.OrderService.update_order(orderId, data)
 
-        if order_update:
+        if not order_update:
 
-            order_updated_dict = order_service.OrderService.order_to_dict(order_update)
-            orderDTO_updated = OrderResponseDTO.model_validate(order_updated_dict)
+            raise APIException(
+                message=f"La compra {orderId} no existe",
+                status=404,
+                error='Not Found'
+            )
 
-            return Response(
-                response = orderDTO_updated.model_dump_json(),
-                status = 200,
-                mimetype = 'application/json'
-            )
-        
-        else:
-            return Response(
-                response = f"La compra {orderId} no existe",
-                status = 404,
-                mimetype = 'application/json'
-            )
+        order_updated_dict = order_service.OrderService.order_to_dict(order_update)
+        orderDTO_updated = OrderResponseDTO.model_validate(order_updated_dict)
+
+        return Response(
+            response = orderDTO_updated.model_dump_json(),
+            status = 200,
+            mimetype = 'application/json'
+        )   
         
     except ValueError as e:
         logger.warning(f"Error de validación: {str(e)}")
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        logger.error(f"Error interno: {str(e)}")
-        return jsonify({'error': str(e)}), 500    
+        return jsonify({'error': str(e)}), 400   
     
 @order_bp.route('/orders/<string:orderId>', methods=['DELETE'])
 @token_required(roles=['artist', 'internal_service']) #-> Validate user token
@@ -91,25 +137,23 @@ def delete_order_by_id(orderId: str):
     try: 
         deleted = order_service.OrderService.delete(orderId)
 
-        if deleted:
-            return Response(
-                response="Compra eliminada correctamente",
-                status=204,
-                mimetype='application/json'
+        if not deleted:
+
+            raise APIException(
+                message=f"La compra {orderId} no existe",
+                status=404,
+                error='Not Found'
             )
-        else:
-            return Response(
-                response = f"La compra {orderId} no existe",
-                status = 404,
-                mimetype = 'application/json'
-            )
+
+        return Response(
+            response="Compra eliminada correctamente",
+            status=204,
+            mimetype='application/json'
+        )
         
     except ValueError as e:
         logger.warning(f"Error de validación: {str(e)}")
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        logger.error(f"Error interno: {str(e)}")
-        return jsonify({'error': str(e)}), 500    
+        return jsonify({'error': str(e)}), 400   
 
 
 @order_bp.route('/orders', methods=['GET'])
@@ -120,6 +164,7 @@ def procesar_compras():
     orders_tuple = None
     try:
         if request.method == 'GET': # Save the query params of the HTTP request in a dictionary
+            
             filters['seller'] = request.args.get('seller')
             filters['status'] = request.args.get('status')
             filters['dateFrom'] = request.args.get('dateFrom')
@@ -129,10 +174,20 @@ def procesar_compras():
 
             # Paginating validation
             if filters['page'] < 0:
-                return jsonify({'code': 400, 'message': 'La pagina debe de ser mayor o igual a 0'}), 400
+                
+                raise APIException(
+                    message='La pagina debe de ser mayor o igual a 0',
+                    status=400,
+                    error='Bad Request'
+                )
             
             if filters['size'] < 20 or filters['size'] > 100:
-                return jsonify({'code': 400, 'message': 'El tamaño de la página debe de ser mayor o igual a 20'}), 400
+                
+                raise APIException(
+                    message='El tamaño de la página debe de ser mayor o igual a 20',
+                    status=400,
+                    error='Bad Request'
+                )
 
             # CASE: No filter applied
             if filters is None: 
@@ -160,8 +215,12 @@ def procesar_compras():
                 mimetype='application/json'
             )
             
-    except Exception as e:
-        return jsonify({'message': str(e)}), 500
+    except ValueError as e:
+        return jsonify({
+            'message': str(e),
+            'status': 400,
+            'error': 'Bad Request'
+        }), 400
 
 @order_bp.route('/orders', methods=['POST'])
 @token_required(roles=['artist', 'internal_service']) #-> Validate user token
@@ -170,14 +229,20 @@ def create_order():
     try:
         # Obtain data from the request
         data = request.get_json()
+
         if not data:
-            return jsonify({'error': 'Datos json no requeridos'}), 400
+
+            raise APIException(
+                message='Datos en json no requeridos',
+                status=400,
+                error='Bad Request'
+            )
         
         # Validate data request with Pylantic
         data_validated = CreateOrderRequestDTO.model_validate(data)
 
-        # Get user from JWT, now is hardcoded
-        current_user = "usuario_actual"
+        # Get user from JWT
+        current_user = request.user_claims.get('username')
 
         order_created = order_service.OrderService.save(
             data_validated, 
@@ -193,7 +258,7 @@ def create_order():
 
         return Response(
             #order_created_dto.model_dump_json(),
-            response,
+            response=json.dumps(response),
             status=201,
             mimetype='application/json'
         )
@@ -210,12 +275,6 @@ def create_order():
             'details': str(e)
         }), 400
         
-    except Exception as e:
-        logger.error(f"Error inesperado: {str(e)}")
-        return jsonify({
-            'error': 'Error interno del servidor',
-            'details': str(e)
-        }), 500
     
 @order_bp.route('/orders/<string:orderId>/confirm', methods=['POST'])
 @token_required(roles=['artist', 'internal_service']) # -> Validate user token
@@ -227,31 +286,49 @@ def confirm_order(orderId: str):
     try:
         # 1. Verificar que la orden existe
         order = order_service.OrderService.find_order(orderId)
+
         if not order:
-            return jsonify({'error': f'La orden {orderId} no existe'}), 404
+
+            raise APIException(
+                message=f'La orden {orderId} no existe',
+                status=404,
+                error='Not Found'
+            )
+            
         
         # 2. Validar que la orden esté en estado procesable
         if not order_service.OrderService.is_order_confirm(orderId):
-            return jsonify({
-                'error': f'La orden {orderId} no puede ser confirmada'
-            }), 400
+
+            raise APIException(
+                message=f'La orden {orderId} no puede ser confirmada',
+                status=400,
+                error='Bad Request'
+            )
+        
         # 3. Verificar disponibilidad de stock ANTES del pago
         stock_availability = order_service.OrderService.check_stock_availability(orderId)
+
         if not stock_availability['all_available']:
-            return jsonify({
-                'error': 'Stock insuficiente para algunos productos',
-                'details': stock_availability.get('details')
-            }), 409  # Conflict
-        
-        print(f"Stock availability: {stock_availability}")
-        
+
+            raise APIException(
+                message=f"Stock insuficiente para algunos productos",
+                status=409,
+                error='Conflict'
+            )
+                
         # 4. Actualizar stock de los productos de la compra de forma lógica
-        #stock_update_result = order_service.OrderService.update_product_stock(orderId, False) 
+        stock_update_result = order_service.OrderService.update_product_stock(orderId, False) 
         
         # 5. Obtener datos de pago del request
         data = request.get_json()
+
         if not data:
-            return jsonify({'error': 'Datos de pago requeridos'}), 400
+
+            raise APIException(
+                message='Datos de pago requeridos',
+                status=400,
+                error='Bad Request'
+            )
         
         # 6. Procesar pago
         payment_result = order_service.OrderService.process_order_payment(orderId, data)
@@ -260,19 +337,24 @@ def confirm_order(orderId: str):
         order_info = payment_result['transaction_data']
         
         if not order_info['success']:
-            return jsonify({
-                'error': 'Error en el procesamiento del pago',
-                'details': payment_result.get('error', 'Error desconocido')
-            }), 402
+
+            raise APIException(
+                message=f'Error en el procesamiento del pago',
+                status=402,
+                error='Payment Error'
+            )
         
 
         # 8. Comprobar si se ha realizado el pago del pedido para actualizar el stock
         if not order_service.OrderService.is_order_paid(orderId):
+
             order_service.OrderService.update_product_stock(orderId, True) # Reestablecemos el stock
-            return jsonify({
-                'error': 'No se ha realizado pago y no se puede actualizar stock',
-                'status': 409
-            }), 409  # Conflict"""
+
+            raise APIException(
+                message='No se ha realizaod pago y no se puede actualizar el stock',
+                status=409,
+                error='Conflict'
+            )
 
         
         
@@ -305,6 +387,3 @@ def confirm_order(orderId: str):
         return jsonify({'error': str(e)}), 404
     except order_service.PaymentProcessingException as e:
         return jsonify({'error': 'Error en el procesamiento del pago', 'details': str(e)}), 502
-    except Exception as e:
-        logger.error(f"Error interno: {str(e)}")
-        return jsonify({'error': str(e)}), 500

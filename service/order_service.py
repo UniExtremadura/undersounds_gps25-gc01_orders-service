@@ -117,14 +117,13 @@ class OrderService:
             if not order:
                 raise OrderNotFoundException(f"Orden {order_id} no encontrada")
             logger.info(f"Order para verificar el stock de sus productos: {order}")
-            print(order)
             availability_check = []
             
             for item in order.items:
-                print(item)
                 try:
                     # Get product stock from content client response
-                    stock_response = content_client.get_product_stock_by_id("6b2bf8bd-649c-465c-b803-eebc9fd6ff6c")
+                    stock_response = content_client.get_product_stock_by_id(item.product_public_id)
+
                     if not stock_response or not stock_response.get('success') is True:
                         availability_check.append({
                             'product_id': item.product_public_id,
@@ -134,6 +133,7 @@ class OrderService:
                         continue
                     
                     current_stock = stock_response.get('stock_product', 0)
+
                     if current_stock is None:
                         availability_check.append({
                             'product_id': item.product_public_id,
@@ -208,12 +208,10 @@ class OrderService:
             successful_updates = [] # Almacenará todos los resultados exitosos que arroka el microservicio de contenido
             for item in order.items:
                 try:
-                    print(item.product_public_id, flush=True) 
                     if not revertir:
                         stock_result = content_client.update_product_stock_by_id(
-                            "6b2bf8bd-649c-465c-b803-eebc9fd6ff6c",
+                            item.product_public_id,
                             -item.quantity)
-                        print(f"Stock result: {stock_result}")
                         
                         if stock_result is None:
                             results.append({
@@ -240,7 +238,7 @@ class OrderService:
                             break # No nos interesa seguir actualizando si uno ya ha fallado
                     else:
                         stock_result = content_client.update_product_stock_by_id(
-                            "6b2bf8bd-649c-465c-b803-eebc9fd6ff6c",
+                            item.product_public_id,
                             +item.quantity)      
                 except Exception as e:
                     logger.error(f"Error actualizando stock de {item.product_public_id}: {e}")
@@ -298,13 +296,6 @@ class OrderService:
             Convert CreateOrderRequestDTO into OrderItem SQLAlchemy
         """
         try:
-            user_info = user_client.get_seller_by_username(username)
-        
-            if not user_info:
-                raise ValueError(f"Error, usuario {username} no encontrado") 
-
-            logger.info(f"Usuario {username} encontrado")
-            
             total_price = 0.0
             order_items = []
 

@@ -2,6 +2,8 @@ import yaml
 from flask import jsonify
 from flask_swagger_ui import get_swaggerui_blueprint
 from datetime import datetime
+from helpers.ApiExceptions import APIException
+from flask import request
 
 def register_blueprints(app):
     """Registry all app's blueprints"""
@@ -62,3 +64,27 @@ def register_basic_routes(app):
             "service": app.config['SERVICE_NAME'],
             "timestamp": datetime.today()
         })
+    
+    # Manejador global de excepciones de tipo APIException, les da el formato de JSON para devolverlo
+    @app.errorhandler(APIException)
+    def handle_api_exception(e):
+        response = {
+            "error": e.error,
+            "message": e.message,
+            "status": e.status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "path": request.path
+        }
+        return jsonify(response), e.status  
+    
+    # Manejador global de excepciones con estado 500, les da el formato de JSON para devolverlo
+    @app.errorhandler(500)
+    def handle_internal_server_error(e):
+        response = {
+            "error": "Internal Server Error",
+            "message": str(e) if str(e) else "Ha ocurrido un error inesperado",
+            "status": 500,
+            "path": request.path,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        return jsonify(response), 500

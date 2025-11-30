@@ -1,67 +1,90 @@
-from flask import Flask, g
-from config import Config, EurekaConfig
-from routes import register_blueprints, register_swagger
-from db import db
-from auth.keycloak_config import init_keycloak
-from clients import init_client
-from flask_cors import CORS
-import os
+import yaml
+from flask import jsonify
+from flask_swagger_ui import get_swaggerui_blueprint
+from datetime import datetime
+from helpers.ApiExceptions import APIException
+from flask import request
 
-def create_app(config_class=Config):
-    """Factory function to create Flask App"""
-    app = Flask(__name__)
-    app.config.from_object(config_class)
+def register_blueprints(app):
+    """Registry all app's blueprints"""
+    from controllers.order_controller import order_bp
+    
+    # Registry endpoints paths
+    app.register_blueprint(order_bp, url_prefix='/api/v1')
+    
+    # Registry basic paths
+    register_basic_routes(app)
 
-    # Avoid CORS problems
-    CORS(app, resources={r"/*": {"origins": "*"}}) # Permite CORS para todas las rutas y orígenes
+def register_swagger(app):
+    """Configure and registry Swagger UI"""
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        app.config['SWAGGER_URL'],
+        app.config['API_URL'],
+        config={
+            'app_name': app.config['SERVICE_NAME'],
+            'docExpansion': 'none'
+        }
+    )
     
-    # Initialize clients
-    init_client(app)
+    app.register_blueprint(swaggerui_blueprint, url_prefix=app.config['SWAGGER_URL'])
+    
+    # Endpoint to serve openapi.json
+    @app.route(app.config['API_URL'])
+    def serve_swagger_json():
+        try:
+            with open('./swagger/swagger.yaml', 'r', encoding='utf-8') as file:
+                swagger_spec = yaml.safe_load(file)
+            return jsonify(swagger_spec)
+        except Exception as e:
+            app.logger.error(f"Error cargando swagger.yaml: {e}")
+            return jsonify({
+                "error": "No se pudo cargar la especificación Swagger",
+                "details": str(e)
+            }), 500
 
-    # Initialize extensions
-    initialize_extensions(app)
+def register_basic_routes(app):
+    """Registra basic app's paths"""
     
-    # Registry paths and blueprints
-    register_blueprints(app)
+    @app.route('/')
+    def index():
+        return jsonify({
+            "service": app.config['SERVICE_NAME'],
+            "version": app.config['SERVICE_VERSION'],
+            "status": "running",
+            "endpoints-generales": {
+                "docs": app.config['SWAGGER_URL'],
+                "health": "/api/v1/health"
+            }
+        })
     
-    # Configure Swagger UI
-    register_swagger(app)
+    @app.route('/api/v1/health')
+    def health_check():
+        return jsonify({
+            "status": "healthy",
+            "service": app.config['SERVICE_NAME'],
+            "timestamp": datetime.today()
+        })
     
-    # Registry handler errors
-    register_error_handlers(app)
-
-    #Subscription into Eureka's server
-    #EurekaConfig.init_eureka(app)
+    # Manejador global de excepciones de tipo APIException, les da el formato de JSON para devolverlo
+    @app.errorhandler(APIException)
+    def handle_api_exception(e):
+        response = {
+            "error": e.error,
+            "message": e.message,
+            "status": e.status,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "path": request.path
+        }
+        return jsonify(response), e.status  
     
-    return app
-
-
-
-def initialize_extensions(app):
-    """Initialize Flask Extensions"""
-    # Base de datos
-    db.init_app(app)
-    
-    # Keycloak
-    init_keycloak(app)
-    
-    # Otras extensiones pueden ir aquí
-
-def register_error_handlers(app):
-    """Registry global errors handler"""
-    
-    @app.errorhandler(404)
-    def not_found_error(error):
-        return {
-            "error": "Recurso no encontrado",
-            "message": str(error),
-            "status_code": 404
-        }, 404
-    
+    # Manejador global de excepciones con estado 500, les da el formato de JSON para devolverlo
     @app.errorhandler(500)
-    def internal_error(error):
-        return {
-            "error": "Error interno del servidor",
-            "message": "Ha ocurrido un error inesperado",
-            "status_code": 500
-        }, 500
+    def handle_internal_server_error(e):
+        response = {
+            "error": "Internal Server Error",
+            "message": str(e) if str(e) else "Ha ocurrido un error inesperado",
+            "status": 500,
+            "path": request.path,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        return jsonify(response), 500

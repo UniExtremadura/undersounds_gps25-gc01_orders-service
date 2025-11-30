@@ -3,6 +3,7 @@ from flask import request, jsonify, current_app
 from jose import jwt
 from jose.backends import RSAKey
 from jose.utils import base64url_decode
+from helpers.ApiExceptions import APIException
 import requests
 import json
 
@@ -69,8 +70,12 @@ def token_required(roles: list = None):
             current_app.logger.info("Verificando token...")
             
             if not auth_header:
-                return jsonify({'code': 401, 'message': 'Token requerido'}), 401
-            
+                raise APIException(
+                    message="Token requerido para completar la acción",
+                    status=401,
+                    error='Token required'
+                )
+                        
             try:
                 # Verificar formato
                 if not auth_header.startswith('Bearer '):
@@ -113,18 +118,22 @@ def token_required(roles: list = None):
                 if roles:
                     token_roles = claims.get('roles', [])
                     if not any(role in token_roles for role in roles):
-                        return jsonify({
-                            'message': 'Roles insuficientes',
-                            'required': roles,
-                            'user_roles': token_roles
-                        }), 403
-                
+                        raise APIException(
+                            message='Roles insuficientes',
+                            status=403,
+                            error='Invalid Role'
+                        )
+                    
                 # Guardar claims para usar en el endpoint
                 request.user_claims = claims
                 
             except jwt.ExpiredSignatureError:
                 current_app.logger.warning("Token expirado")
-                return jsonify({'message': 'Token expirado'}), 401
+                raise APIException(
+                    message="The token that was used in headers is expired",
+                    status=401,
+                    error='Token expired'
+                )
             except jwt.JWTClaimsError as e:
                 current_app.logger.warning(f"Error en claims del token: {e}")
                 return jsonify({'message': f'Token inválido: {str(e)}'}), 401
